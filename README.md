@@ -46,19 +46,26 @@ client.sync()
 
 Scan for `meshtastic.SERVICE_UUID`, then open `TO_RADIO_UUID`, `FROM_RADIO_UUID` and `FROM_NUM_UUID`.
 
-Over BLE one read returns exactly one message, which is what `push` expects, and an empty read means the queue is drained. A serial link would reframe its stream on `0x94 0xc3 <len>` first and push whole messages the same way.
+Over BLE one read returns exactly one message, which is what `push` expects, and an empty read means the queue is drained.
 
-## What it models
+## What it speaks
 
-`myInfo`, `nodeInfo`, `config.lora`, `channel`, text packets and the slice of `AdminMessage` needed to read and write a channel slot.
+|               |                                                                       |
+| ------------- | --------------------------------------------------------------------- |
+| Text messages | send, receive, and the ack that says whether one arrived              |
+| Position      | latitude, longitude, altitude                                         |
+| Telemetry     | battery, voltage, channel use, uptime                                 |
+| Nodes         | the database on connect, and nodes announcing themselves over the air |
+| Radio config  | region, modem preset, hop limit                                       |
+| Channel slots | read and write, over the admin API                                    |
 
-Everything else: position, telemetry, waypoints are kipped by wire type, so a radio on newer firmware still parses. This is not a complete Meshtastic implementation.
+Anything else a radio sends - waypoints, remote hardware, audio - is skipped by wire type rather than guessed at, so a radio on newer firmware still parses.
 
 ## API
 
 See [`index.d.ts`](index.d.ts) for the full typed surface.
 
-The UUIDs come from the [client API docs](https://meshtastic.org/docs/development/device/client-api/). Note that the older ESP32 documentation gives `8ba2bcc2-...` for FromRadio, which is obsolete.
+The UUIDs come from the [client API docs](https://meshtastic.org/docs/development/device/client-api/).
 
 ## License
 

@@ -228,6 +228,152 @@ test('truncated frames throw instead of returning junk', (t) => {
   t.exception(() => meshtastic.decode(Buffer.from([0x08, 0xff])), /truncated/)
 })
 
+test('decode a routing ack', (t) => {
+  const ok = meshtastic.decodeRouting(Buffer.from([]))
+  t.is(ok.delivered, true, 'error_reason omitted means NONE')
+  t.is(ok.reason, 'NONE')
+
+  const failed = meshtastic.decodeRouting(Buffer.from([...tag(3, 0), ...varint(5)]))
+  t.is(failed.delivered, false)
+  t.is(failed.reason, 'MAX_RETRANSMIT')
+
+  const unknown = meshtastic.decodeRouting(Buffer.from([...tag(3, 0), ...varint(200)]))
+  t.is(unknown.reason, 'UNKNOWN', 'a reason this version does not name')
+})
+
+test('decode a position', (t) => {
+  const position = meshtastic.decodePosition(
+    Buffer.from([
+      ...tag(1, 5),
+      ...sfixed32(488566000),
+      ...tag(2, 5),
+      ...sfixed32(23522000),
+      ...tag(3, 0),
+      ...varint(35),
+      ...tag(4, 5),
+      ...fixed32(1700000000)
+    ])
+  )
+
+  t.is(position.latitude, 48.8566)
+  t.is(position.longitude, 2.3522)
+  t.is(position.altitude, 35)
+  t.is(position.time, 1700000000)
+})
+
+test('a position south and west comes back negative', (t) => {
+  const position = meshtastic.decodePosition(
+    Buffer.from([...tag(1, 5), ...sfixed32(-338688000), ...tag(2, 5), ...sfixed32(-704440000)])
+  )
+
+  t.is(position.latitude, -33.8688)
+  t.is(position.longitude, -70.444)
+})
+
+test('decode telemetry', (t) => {
+  const metrics = [
+    ...tag(1, 0),
+    ...varint(82),
+    ...tag(2, 5),
+    ...float(3.98),
+    ...tag(3, 5),
+    ...float(4.5),
+    ...tag(5, 0),
+    ...varint(3600)
+  ]
+
+  const telemetry = meshtastic.decodeTelemetry(
+    Buffer.from([...tag(1, 5), ...fixed32(1700000000), ...sub(2, metrics)])
+  )
+
+  t.is(telemetry.battery, 82)
+  t.is(Math.round(telemetry.voltage * 100) / 100, 3.98)
+  t.is(telemetry.channelUtilization, 4.5)
+  t.is(telemetry.uptime, 3600)
+  t.is(telemetry.airUtilTx, null, 'a metric the radio did not send')
+})
+
+test('decode a node announcing itself over the air', (t) => {
+  const user = meshtastic.decodeUserPayload(
+    Buffer.from([...sub(1, text('!abc')), ...sub(2, text('LoRa1')), ...sub(3, text('LR1'))])
+  )
+
+  t.is(user.longName, 'LoRa1')
+  t.is(user.shortName, 'LR1')
+})
+
+test('a packet carries the id it is answering', (t) => {
+  const data = [...tag(1, 0), ...varint(meshtastic.PORT_ROUTING), ...tag(6, 5), ...fixed32(0x1234)]
+  const frame = meshtastic.decode(
+    Buffer.from(sub(2, [...tag(1, 5), ...fixed32(1), ...sub(4, data)]))
+  )
+
+  t.is(frame.packet.data.requestId, 0x1234)
+})
+
+test('a client routes each packet to its own event', (t) => {
+  t.plan(5)
+
+  const client = new meshtastic.Client({ read: () => {}, write: () => {} })
+
+  function deliver(portnum, payload, opts = {}) {
+    const data = [
+      ...tag(1, 0),
+      ...varint(portnum),
+      ...sub(2, payload),
+      ...(opts.requestId ? [...tag(6, 5), ...fixed32(opts.requestId)] : [])
+    ]
+
+    const packet = [
+      ...tag(1, 5),
+      ...fixed32(0x11223344),
+      ...tag(2, 5),
+      ...fixed32(0xffffffff),
+      ...sub(4, data)
+    ]
+
+    client.push(Buffer.from(sub(2, packet)))
+  }
+
+  client.on('message', (m) => {
+    t.is(m.text, 'hello')
+    t.is(m.from, '!11223344')
+  })
+
+  client.on('ack', (a) => {
+    t.is(a.id, 0x4321)
+    t.is(a.delivered, false)
+  })
+
+  client.on('position', (p) => t.is(p.latitude, 48.8566))
+
+  deliver(meshtastic.PORT_TEXT_MESSAGE, text('hello'))
+  deliver(meshtastic.PORT_ROUTING, [...tag(3, 0), ...varint(3)], { requestId: 0x4321 })
+  deliver(meshtastic.PORT_POSITION, [...tag(1, 5), ...sfixed32(488566000)])
+
+  client.destroy()
+})
+
+test('a client drops the echo of its own packet', (t) => {
+  const client = new meshtastic.Client({ read: () => {}, write: () => {} })
+
+  client.push(Buffer.from(sub(3, [...tag(1, 0), ...varint(0x11223344)])))
+  client.on('message', () => t.fail('our own packet came back as a message'))
+
+  const data = [...tag(1, 0), ...varint(meshtastic.PORT_TEXT_MESSAGE), ...sub(2, text('mine'))]
+  client.push(Buffer.from(sub(2, [...tag(1, 5), ...fixed32(0x11223344), ...sub(4, data)])))
+
+  t.pass('no message emitted')
+  client.destroy()
+})
+
+test('the entry exposes everything the protocol has', (t) => {
+  const protocol = require('./lib/protocol')
+  const missing = Object.keys(protocol).filter((key) => key in meshtastic === false)
+
+  t.alike(missing, [], 'index.js must re-export every name')
+})
+
 test('a client drives the conversation over whatever it is given', (t) => {
   const written = []
   const client = new meshtastic.Client({
@@ -274,6 +420,12 @@ function text(value) {
 }
 function bytes(message) {
   return Array.from(message)
+}
+
+function sfixed32(value) {
+  const b = Buffer.alloc(4)
+  b.writeInt32LE(value)
+  return [...b]
 }
 
 function fixed32(value) {
