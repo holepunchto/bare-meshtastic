@@ -1,0 +1,35 @@
+{
+  "name": "bare-meshtastic",
+  "version": "0.1.0",
+  "description": "Meshtastic protocol codec and client, transport agnostic",
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "index.d.ts"
+  ],
+  "scripts": {
+    "format": "prettier --write . && lunte --fix",
+    "lint": "prettier --check . && lunte",
+    "test": "brittle-bare --coverage test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/holepunchto/bare-meshtastic.git"
+  },
+  "author": "Tony Gorez",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/holepunchto/bare-meshtastic/issues"
+  },
+  "homepage": "https://github.com/holepunchto/bare-meshtastic#readme",
+  "devDependencies": {
+    "brittle": "^3.3.2",
+    "lunte": "^1.7.0",
+    "prettier": "^3.9.1",
+    "prettier-config-holepunch": "^2.0.0"
+  }
+}
