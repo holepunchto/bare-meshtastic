@@ -294,5 +294,9 @@ export class Client extends EventEmitter<ClientEventMap> {
    */
   nameOf(num: number): string
 
+  /** Idempotent. Lets the link go through the `close` the constructor was given. */
   destroy(): void
+
+  /** So a client can be held with `using`. */
+  [Symbol.dispose](): void
 }

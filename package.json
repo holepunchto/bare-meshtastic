@@ -26,6 +26,9 @@
     "url": "https://github.com/holepunchto/bare-meshtastic/issues"
   },
   "homepage": "https://github.com/holepunchto/bare-meshtastic#readme",
+  "dependencies": {
+    "bare-events": "^2.9.0"
+  },
   "devDependencies": {
     "brittle": "^3.3.2",
     "lunte": "^1.7.0",
