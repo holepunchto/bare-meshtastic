@@ -1,4 +1,5 @@
 import { EventEmitter, EventMap } from 'bare-events'
+import { Duplex } from 'bare-stream'
 
 /**
  * The BLE service a Meshtastic radio advertises, and the three
@@ -225,6 +226,7 @@ export interface ClientEventMap extends EventMap {
   telemetry: [telemetry: Telemetry & Sender]
   node: [node: Node]
   admin: [admin: Admin]
+  close: []
   disconnect: []
   error: [error: Error]
 }
@@ -245,22 +247,22 @@ export interface Message extends Sender {
 }
 
 export interface ClientOptions {
-  /** Ask the link for the next message. Whatever it returns must reach {@link Client.push}. */
-  read: () => void
-  write: (frame: Buffer) => void
-  close?: () => void
   log?: (...args: any[]) => void
   /** How long {@link Client.sync} waits for the node database. Defaults to 15s. */
   syncTimeout?: number
 }
 
 /**
- * The Meshtastic conversation, with no idea what it is talking over. It holds
- * the state machine - the queue drain, the config sync, the admin passkey -
- * and the caller holds the wire.
+ * The Meshtastic conversation over a stream of framed messages. It holds the
+ * state machine - the config sync, the admin passkey, the node database - and
+ * the stream holds the wire.
+ *
+ * Over BLE the stream's `_read` is one characteristic read and an empty answer
+ * means the radio's queue is drained; over serial or TCP it is the link
+ * itself. Either way the stream gives backpressure in both directions.
  */
 export class Client extends EventEmitter<ClientEventMap> {
-  constructor(opts: ClientOptions)
+  constructor(stream: Duplex, opts?: ClientOptions)
 
   readonly nodeNum: number
   readonly nodes: Map<number, Node>
@@ -274,20 +276,14 @@ export class Client extends EventEmitter<ClientEventMap> {
   sync(): void
 
   /** Sugar for {@link Client.sendPacket} on {@link PORT_TEXT_MESSAGE}. */
-  send(text: string, opts?: PacketOptions): void
+  send(text: string, opts?: PacketOptions): boolean
 
   /** Asks for an ack unless `opts.wantAck` says otherwise. */
-  sendPacket(portnum: number, payload: Uint8Array, opts?: PacketOptions): void
+  sendPacket(portnum: number, payload: Uint8Array, opts?: PacketOptions): boolean
 
-  getChannel(index: number): void
+  getChannel(index: number): boolean
 
   setChannel(index: number, settings: { name: string; psk: Uint8Array }, passkey: Uint8Array): void
-
-  /** Tell the client the radio has something waiting. Only one read is ever outstanding. */
-  notify(): void
-
-  /** One message off the link. Null or empty means the queue is drained. */
-  push(data: Uint8Array | null): void
 
   /**
    * A node's short name, or its {@link nodeId} when no name has been heard
@@ -296,7 +292,7 @@ export class Client extends EventEmitter<ClientEventMap> {
    */
   nameOf(num: number): string
 
-  /** Idempotent. Lets the link go through the `close` the constructor was given. */
+  /** Idempotent. Destroys the stream it was given. */
   destroy(): void
 
   /** So a client can be held with `using`. */

@@ -25,28 +25,23 @@ peripheral.on('read', (c, data) => {
 })
 ```
 
-`Client` adds the conversation - draining the radio's queue, the config sync, the admin passkey - and asks you only for a way to read and write.
+`Client` adds the conversation - the config sync, the admin passkey, the node database - over any stream of framed messages.
 
 ```js
 const { Client } = require('bare-meshtastic')
 
-const client = new Client({
-  read: () => peripheral.read(fromRadio),
-  write: (frame) => peripheral.write(toRadio, frame, true)
-})
-
-peripheral.on('notify', () => client.notify())
-peripheral.on('read', (c, data) => client.push(data))
+const client = new Client(radio) // a Duplex of whole FromRadio / ToRadio messages
 
 client.on('ready', () => console.log(client.id, client.nodes.size, 'nodes'))
 client.on('message', (m) => console.log(m.name, m.text, m.snr))
+client.on('ack', (a) => console.log('delivered:', a.delivered))
 
 client.sync()
 ```
 
-Scan for `meshtastic.SERVICE_UUID`, then open `TO_RADIO_UUID`, `FROM_RADIO_UUID` and `FROM_NUM_UUID`.
+Over BLE that stream's `_read` is one characteristic read, and an empty answer means the radio's queue is drained rather than end of stream. Over serial or TCP it is the link itself. Either way you get backpressure in both directions, and `send` tells you when to wait.
 
-Over BLE one read returns exactly one message, which is what `push` expects, and an empty read means the queue is drained.
+Scan for `meshtastic.SERVICE_UUID`, then open `TO_RADIO_UUID`, `FROM_RADIO_UUID` and `FROM_NUM_UUID`.
 
 ## What it speaks
 

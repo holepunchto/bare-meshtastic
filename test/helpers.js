@@ -1,3 +1,5 @@
+const { Duplex } = require('bare-stream')
+
 // An encoder that shares no code with the one under test, so a bug in the
 // codec's own Writer cannot hide behind the same bug in a helper.
 
@@ -73,7 +75,34 @@ function asks(frame) {
 const settings = [...sub(2, [...Buffer.alloc(32, 0xab)]), ...sub(3, text('beacon'))]
 const channel = [...tag(1, 0), ...varint(1), ...sub(2, settings)]
 
+// A radio that keeps what was written to it and lets a test push frames back.
+class FakeRadio extends Duplex {
+  constructor({ slow = false, highWaterMark } = {}) {
+    super({ highWaterMark })
+    this.slow = slow
+    this.written = []
+  }
+
+  _read() {}
+
+  _write(chunk, encoding, cb) {
+    this.written.push(chunk)
+
+    // A slow radio never finishes a write, which is how backpressure builds.
+    if (this.slow) return
+
+    cb(null)
+  }
+}
+
+// Stream data arrives a tick after the push.
+function settle() {
+  return new Promise(setImmediate)
+}
+
 module.exports = {
+  FakeRadio,
+  settle,
   varint,
   tag,
   sub,

@@ -374,3 +374,21 @@ test('a preset this version does not name is not invented', (t) => {
 
   t.is(meshtastic.decode(Buffer.from(sub(5, sub(6, lora)))).lora.preset, 'UNKNOWN')
 })
+
+test('a node report carries its signal strength', (t) => {
+  const node = [...tag(1, 0), ...varint(42), ...tag(4, 5), ...float(-7.25)]
+
+  t.is(meshtastic.decode(Buffer.from(sub(4, node))).node.snr, -7.25)
+})
+
+test('telemetry carries the air time a radio spent talking', (t) => {
+  const metrics = [...tag(1, 0), ...varint(82), ...tag(4, 5), ...float(1.5)]
+
+  t.is(meshtastic.decodeTelemetry(Buffer.from(sub(2, metrics))).airUtilTx, 1.5)
+})
+
+test('an admin reply carries the passkey a write has to echo', (t) => {
+  const admin = meshtastic.decodeAdmin(Buffer.from(sub(101, [1, 2, 3, 4])))
+
+  t.alike(Array.from(admin.passkey), [1, 2, 3, 4])
+})
