@@ -345,3 +345,32 @@ test('the entry exposes everything the protocol has', (t) => {
 
   t.alike(missing, [], 'index.js must re-export every name')
 })
+
+test('every truncated fixed-width field throws', (t) => {
+  // MeshPacket.from is a fixed32; FromRadio.id next to it is a varint
+  t.exception(
+    () => meshtastic.decode(Buffer.from(sub(2, [...tag(1, 5), 1, 2]))),
+    /truncated fixed32/
+  )
+  t.exception(
+    () => meshtastic.decodePosition(Buffer.from([...tag(1, 5), 1, 2])),
+    /truncated sfixed32/
+  )
+  t.exception(() => meshtastic.decode(Buffer.from(sub(2, [...tag(8, 5), 1, 2]))), /truncated float/)
+})
+
+test('a varint that never ends throws rather than spinning', (t) => {
+  const runaway = [...tag(1, 0), ...Array(12).fill(0xff)]
+
+  t.exception(() => meshtastic.decode(Buffer.from(runaway)), /varint too long/)
+})
+
+test('a wire type that does not exist throws', (t) => {
+  t.exception(() => meshtastic.decode(Buffer.from([...tag(99, 3), 1])), /unknown wire type 3/)
+})
+
+test('a preset this version does not name is not invented', (t) => {
+  const lora = [...tag(1, 0), ...varint(1), ...tag(2, 0), ...varint(99)]
+
+  t.is(meshtastic.decode(Buffer.from(sub(5, sub(6, lora)))).lora.preset, 'UNKNOWN')
+})

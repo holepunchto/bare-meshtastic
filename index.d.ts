@@ -250,6 +250,8 @@ export interface ClientOptions {
   write: (frame: Buffer) => void
   close?: () => void
   log?: (...args: any[]) => void
+  /** How long {@link Client.sync} waits for the node database. Defaults to 15s. */
+  syncTimeout?: number
 }
 
 /**
