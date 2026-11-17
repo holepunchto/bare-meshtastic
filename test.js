@@ -311,6 +311,40 @@ test('a packet carries the id it is answering', (t) => {
   t.is(frame.packet.data.requestId, 0x1234)
 })
 
+test('a second sync makes the first one stale', (t) => {
+  t.plan(1)
+
+  const asked = []
+  const client = new meshtastic.Client({
+    read: () => {},
+    write: (frame) => asked.push(wantConfigId(frame))
+  })
+
+  client.sync()
+  client.sync()
+  client.on('ready', () => t.pass('only the answer to the second sync finishes it'))
+
+  client.push(Buffer.from([...tag(7, 0), ...varint(asked[0])]))
+  client.push(Buffer.from([...tag(7, 0), ...varint(asked[1])]))
+
+  client.destroy()
+})
+
+test('a client can send on any port, not just text', (t) => {
+  const sent = []
+  const client = new meshtastic.Client({ read: () => {}, write: (frame) => sent.push(frame) })
+
+  client.send('hi')
+  client.sendPacket(meshtastic.PORT_POSITION, Buffer.from([1, 2, 3]), { wantAck: false })
+
+  t.ok(sent[0].includes(Buffer.from([0x08, meshtastic.PORT_TEXT_MESSAGE])), 'text port')
+  t.ok(sent[1].includes(Buffer.from([0x08, meshtastic.PORT_POSITION])), 'position port')
+  t.ok(sent[0].includes(Buffer.from([0x50, 0x01])), 'text asks for an ack by default')
+  t.absent(sent[1].includes(Buffer.from([0x50, 0x01])), 'wantAck can be turned off')
+
+  client.destroy()
+})
+
 test('a client routes each packet to its own event', (t) => {
   t.plan(5)
 
@@ -420,6 +454,20 @@ function text(value) {
 }
 function bytes(message) {
   return Array.from(message)
+}
+
+// ToRadio { want_config_id }: one tag byte, then the id as a varint.
+function wantConfigId(frame) {
+  let value = 0
+  let scale = 1
+
+  for (let i = 1; i < frame.length; i++) {
+    value += (frame[i] & 0x7f) * scale
+    if ((frame[i] & 0x80) === 0) break
+    scale *= 128
+  }
+
+  return value
 }
 
 function sfixed32(value) {

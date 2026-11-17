@@ -157,6 +157,16 @@ export interface PacketOptions {
   wantResponse?: boolean
 }
 
+/**
+ * A 32-bit draw, never zero. The mesh uses these to dedupe a relayed copy and
+ * to match a reply to its request, so they only need to be unlikely to
+ * collide - they are not secrets.
+ */
+export function randomId(): number
+
+/** A `ToRadio` carrying one payload on one port. */
+export function packet(portnum: number, payload: Uint8Array, opts?: PacketOptions): Buffer
+
 export function decode(data: Uint8Array): Frame
 
 export function decodeAdmin(data: Uint8Array): Admin
@@ -261,7 +271,11 @@ export class Client extends EventEmitter<ClientEventMap> {
   /** Ask for the node database, then drain whatever the radio has queued. Emits `ready`. */
   sync(): void
 
-  send(text: string): void
+  /** Sugar for {@link Client.sendPacket} on {@link PORT_TEXT_MESSAGE}. */
+  send(text: string, opts?: PacketOptions): void
+
+  /** Asks for an ack unless `opts.wantAck` says otherwise. */
+  sendPacket(portnum: number, payload: Uint8Array, opts?: PacketOptions): void
 
   getChannel(index: number): void
 
@@ -273,6 +287,11 @@ export class Client extends EventEmitter<ClientEventMap> {
   /** One message off the link. Null or empty means the queue is drained. */
   push(data: Uint8Array | null): void
 
+  /**
+   * A node's short name, or its {@link nodeId} when no name has been heard
+   * yet - which is what every Meshtastic client shows. For display; it does
+   * not tell you whether the node is actually known.
+   */
   nameOf(num: number): string
 
   destroy(): void

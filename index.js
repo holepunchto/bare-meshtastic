@@ -20,6 +20,8 @@ exports.PORT_ADMIN = protocol.PORT_ADMIN
 exports.PORT_TELEMETRY = protocol.PORT_TELEMETRY
 exports.MAX_PAYLOAD = protocol.MAX_PAYLOAD
 
+exports.packet = protocol.packet
+exports.randomId = protocol.randomId
 exports.decode = protocol.decode
 exports.decodeAdmin = protocol.decodeAdmin
 exports.decodeRouting = protocol.decodeRouting
