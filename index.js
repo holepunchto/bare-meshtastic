@@ -1,6 +1,8 @@
 const protocol = require('./lib/protocol')
 
 exports.Client = require('./lib/client')
+exports.Framed = require('./lib/framed')
+exports.Mailbox = require('./lib/mailbox')
 
 exports.SERVICE_UUID = protocol.SERVICE_UUID
 exports.TO_RADIO_UUID = protocol.TO_RADIO_UUID

@@ -374,3 +374,58 @@ test('a relayed message counts the hops it took', async (t) => {
   radio.push(Buffer.from(sub(2, relayed)))
   await settle()
 })
+
+test('an undecodable message says what is missing', (t) => {
+  t.plan(3)
+
+  const radio = new FakeRadio()
+  const client = new meshtastic.Client(radio)
+  t.teardown(() => client.destroy())
+
+  client.on('error', (err) => {
+    t.is(err.code, 'MESSAGE_UNDECODABLE')
+    t.ok(/Framed/.test(err.message), err.message)
+    t.ok(err.cause, 'the decoder error is still there to read')
+  })
+
+  const whole = Buffer.from(sub(3, [...tag(1, 0), ...varint(0xdeadbeef)]))
+  radio.push(whole.subarray(0, 3))
+})
+
+test('a bad payload is not blamed on the framing', (t) => {
+  t.plan(2)
+
+  const radio = new FakeRadio()
+  const client = new meshtastic.Client(radio)
+  t.teardown(() => client.destroy())
+
+  client.on('error', (err) => {
+    t.is(err.message, 'truncated varint', 'the decoder speaks for itself')
+    t.absent(err.code, 'the frame itself arrived whole, so Framed is not the answer')
+  })
+
+  // Routing.error_reason, a varint with no last byte
+  const payload = [...tag(3, 0), 0xff]
+  const data = [...tag(1, 0), ...varint(meshtastic.PORT_ROUTING), ...sub(2, payload)]
+
+  radio.push(Buffer.from(sub(2, sub(4, data))))
+})
+
+test('a listener that throws is not blamed on the framing', (t) => {
+  t.plan(2)
+
+  const radio = new FakeRadio()
+  const client = new meshtastic.Client(radio)
+  t.teardown(() => client.destroy())
+
+  client.on('node', () => {
+    throw new Error('the caller has a bug')
+  })
+
+  client.on('error', (err) => {
+    t.is(err.message, 'the caller has a bug', 'their error, reported as theirs')
+    t.absent(err.code)
+  })
+
+  radio.push(Buffer.from(sub(4, [...tag(1, 0), ...varint(0xdeadbeef)])))
+})

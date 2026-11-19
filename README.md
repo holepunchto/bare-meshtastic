@@ -25,12 +25,12 @@ peripheral.on('read', (c, data) => {
 })
 ```
 
-`Client` adds the conversation - the config sync, the admin passkey, the node database - over any stream of framed messages.
+`Client` adds the conversation - the config sync, the admin passkey, the node database - over a link wrapped in the adapter it needs. Serial and TCP need `Framed`:
 
 ```js
-const { Client } = require('bare-meshtastic')
+const { Client, Framed } = require('bare-meshtastic')
 
-const client = new Client(radio) // a Duplex of whole FromRadio / ToRadio messages
+const client = new Client(new Framed(socket))
 
 client.on('ready', () => console.log(client.id, client.nodes.size, 'nodes'))
 client.on('message', (m) => console.log(m.name, m.text, m.snr))
@@ -39,9 +39,55 @@ client.on('ack', (a) => console.log('delivered:', a.delivered))
 client.sync()
 ```
 
-Over BLE that stream's `_read` is one characteristic read, and an empty answer means the radio's queue is drained rather than end of stream. Over serial or TCP it is the link itself. Either way you get backpressure in both directions, and `send` tells you when to wait.
+BLE needs `Mailbox`:
 
-Scan for `meshtastic.SERVICE_UUID`, then open `TO_RADIO_UUID`, `FROM_RADIO_UUID` and `FROM_NUM_UUID`.
+```js
+const { Central } = require('bare-bluetooth')
+const meshtastic = require('bare-meshtastic')
+const { Client, Mailbox } = meshtastic
+
+const central = new Central()
+
+central.on('stateChange', (state) => {
+  if (state === 'poweredOn') central.startScan([meshtastic.SERVICE_UUID])
+})
+
+central.on('discover', (peripheral) => {
+  central.stopScan()
+  central.connect(peripheral)
+})
+
+central.on('connect', (peripheral) => {
+  peripheral.on('servicesDiscover', (services) => {
+    peripheral.discoverCharacteristics(services[0])
+  })
+
+  peripheral.on('characteristicsDiscover', (service, characteristics) => {
+    const find = (uuid) => characteristics.find((c) => c.uuid.toLowerCase() === uuid)
+    const fromNum = find(meshtastic.FROM_NUM_UUID)
+
+    const mailbox = new Mailbox(
+      peripheral,
+      {
+        toRadio: find(meshtastic.TO_RADIO_UUID),
+        fromRadio: find(meshtastic.FROM_RADIO_UUID),
+        fromNum
+      },
+      { close: () => central.disconnect(peripheral) }
+    )
+
+    const client = new Client(mailbox)
+
+    client.on('ready', () => client.send('hello'))
+    client.on('message', (m) => console.log(m.name, m.text))
+
+    peripheral.subscribe(fromNum)
+    client.sync()
+  })
+
+  peripheral.discoverServices([meshtastic.SERVICE_UUID])
+})
+```
 
 ## What it speaks
 

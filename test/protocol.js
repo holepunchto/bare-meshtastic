@@ -392,3 +392,19 @@ test('an admin reply carries the passkey a write has to echo', (t) => {
 
   t.alike(Array.from(admin.passkey), [1, 2, 3, 4])
 })
+
+test('a truncated negative varint throws rather than guessing', (t) => {
+  // MeshPacket.rx_rssi is an int32, so a negative one is ten bytes on the wire
+  const cut = [...tag(12, 0), ...varint(-95).slice(0, 4)]
+
+  t.exception(() => meshtastic.decode(Buffer.from(sub(2, cut))), /truncated varint/)
+})
+
+test('a packet id is never zero, even when the draw is', (t) => {
+  const random = Math.random
+  t.teardown(() => (Math.random = random))
+
+  Math.random = () => 0
+
+  t.is(meshtastic.randomId(), 1, 'zero means "no id" to the mesh, so it is not one')
+})

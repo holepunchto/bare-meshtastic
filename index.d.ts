@@ -252,14 +252,68 @@ export interface ClientOptions {
   syncTimeout?: number
 }
 
+export interface Characteristic {
+  uuid: string
+}
+
+export interface Characteristics {
+  toRadio: Characteristic
+  fromRadio: Characteristic
+  fromNum: Characteristic
+}
+
+export interface Peripheral extends EventEmitter {
+  read(characteristic: Characteristic): void
+  write(characteristic: Characteristic, data: Uint8Array, withResponse: boolean): void
+}
+
+export interface MailboxOptions {
+  /** Called with the peripheral when the stream is destroyed, to hand the link back. */
+  close?: (peripheral: Peripheral) => void
+}
+
 /**
- * The Meshtastic conversation over a stream of framed messages. It holds the
- * state machine - the config sync, the admin passkey, the node database - and
- * the stream holds the wire.
+ * A connected GATT peripheral in, a {@link Duplex} of whole messages out -
+ * which is what a {@link Client} takes.
  *
- * Over BLE the stream's `_read` is one characteristic read and an empty answer
- * means the radio's queue is drained; over serial or TCP it is the link
- * itself. Either way the stream gives backpressure in both directions.
+ * Meshtastic over GATT is a mailbox, not a push feed: {@link FROM_NUM_UUID}
+ * says something arrived, {@link FROM_RADIO_UUID} hands over one message per
+ * read, and an empty read means the queue is drained rather than end of
+ * stream. One read is in flight at a time, a nudge during one collapses into a
+ * single follow-up, and reads stop while nobody is reading the stream.
+ *
+ * Subscribing to {@link FROM_NUM_UUID} is left to the caller: on iOS that is
+ * what triggers pairing. Throws if any of the three characteristics is
+ * missing.
+ */
+export class Mailbox extends Duplex {
+  constructor(peripheral: Peripheral, characteristics: Characteristics, opts?: MailboxOptions)
+}
+
+/**
+ * A link that carries bytes in, a {@link Duplex} of whole messages out - what
+ * serial and TCP need. A GATT link does not: one read is already one message.
+ *
+ * Noise before a message is skipped, so a radio's boot log does not derail it.
+ * A message over 512 bytes is refused rather than truncated.
+ */
+export class Framed extends Duplex {
+  constructor(stream: Duplex)
+}
+
+/**
+ * The Meshtastic conversation. It holds the state machine - the config sync,
+ * the admin passkey, the node database - and the stream holds the wire.
+ *
+ * The stream carries one whole `FromRadio` message per `data` event and takes
+ * one whole `ToRadio` message per write. What makes a link look like that
+ * depends on the link: {@link Mailbox} for a GATT link, {@link Framed} for one
+ * that carries bytes.
+ *
+ * Hand it a raw socket instead and the first fragment it reads is not a whole
+ * message, so it emits an `error` with code `MESSAGE_UNDECODABLE` naming
+ * {@link Framed}. Nothing else carries that code: a payload the radio garbled,
+ * and a listener of yours that throws, are emitted as themselves.
  */
 export class Client extends EventEmitter<ClientEventMap> {
   constructor(stream: Duplex, opts?: ClientOptions)
