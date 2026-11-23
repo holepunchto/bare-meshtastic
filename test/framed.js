@@ -21,6 +21,24 @@ test('a message split across chunks arrives whole', async (t) => {
   t.alike(messages, [Buffer.from('hello')])
 })
 
+test('a message dribbling in byte by byte arrives whole', async (t) => {
+  const { messages, source } = reading(t)
+  const body = Buffer.alloc(300, 0x41)
+  const bytes = frame(body)
+
+  const last = bytes.byteLength - 1
+
+  for (let i = 0; i < last; i++) source.push(bytes.subarray(i, i + 1))
+  await settle()
+
+  t.absent(messages.length, 'nothing until the last byte')
+
+  source.push(bytes.subarray(last))
+  await settle()
+
+  t.alike(messages, [body])
+})
+
 test('two messages in one chunk arrive separately', async (t) => {
   const { messages, source } = reading(t)
 
