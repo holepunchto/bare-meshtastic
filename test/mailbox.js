@@ -216,6 +216,31 @@ test('a client syncs over a mailbox', (t) => {
   client.sync()
 })
 
+test('a radio that answers without a nudge still gets drained', async (t) => {
+  const radio = new FakePeripheral()
+  const mailbox = new meshtastic.Mailbox(radio, characteristics)
+  const client = new meshtastic.Client(mailbox)
+  t.teardown(() => client.destroy())
+
+  // A real radio queues its answer and nudges nobody: the write is the nudge.
+  radio.answers = (frame) => {
+    const id = wantConfigId(frame)
+
+    radio.queue.push(
+      Buffer.from(sub(3, [...tag(1, 0), ...varint(0xdeadbeef)])),
+      Buffer.from([...tag(7, 0), ...varint(id)])
+    )
+  }
+
+  let ready = false
+  client.on('ready', () => (ready = true))
+
+  client.sync()
+  await quiet()
+
+  t.ok(ready, 'the node database arrived')
+})
+
 const characteristics = {
   toRadio: { uuid: meshtastic.TO_RADIO_UUID },
   fromRadio: { uuid: meshtastic.FROM_RADIO_UUID },
@@ -258,6 +283,8 @@ class FakePeripheral extends EventEmitter {
     this.wrote.push(characteristic)
     this._writing = characteristic
 
+    // A radio queues its reply before it acknowledges the write.
+    if (this.answers) this.answers(data)
     if (this.auto) this.respond()
   }
 
