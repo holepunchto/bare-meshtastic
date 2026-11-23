@@ -294,8 +294,10 @@ export class Mailbox extends Duplex {
  * A link that carries bytes in, a {@link Duplex} of whole messages out - what
  * serial and TCP need. A GATT link does not: one read is already one message.
  *
- * Noise before a message is skipped, so a radio's boot log does not derail it.
- * A message over 512 bytes is refused rather than truncated.
+ * 512 bytes is the protocol's ceiling: a longer message is refused rather than
+ * truncated, and a header claiming a longer one is treated as noise, the way
+ * the protocol says a receiver should. Noise before a message is skipped too,
+ * so a radio's boot log does not derail it.
  */
 export class Framed extends Duplex {
   constructor(stream: Duplex)
