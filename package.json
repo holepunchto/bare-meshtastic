@@ -28,7 +28,6 @@
   "homepage": "https://github.com/holepunchto/bare-meshtastic#readme",
   "dependencies": {
     "bare-events": "^2.9.0",
-    "bare-logger": "^2.0.6",
     "bare-stream": "^2.13.4"
   },
   "devDependencies": {
@@ -36,5 +35,13 @@
     "lunte": "^1.7.0",
     "prettier": "^3.9.1",
     "prettier-config-holepunch": "^2.0.0"
+  },
+  "peerDependencies": {
+    "bare-logger": "^2.0.6"
+  },
+  "peerDependenciesMeta": {
+    "bare-logger": {
+      "optional": true
+    }
   }
 }
