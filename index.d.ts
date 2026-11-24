@@ -1,5 +1,6 @@
 import { EventEmitter, EventMap } from 'bare-events'
 import { Duplex } from 'bare-stream'
+import Log from 'bare-logger'
 
 /**
  * The BLE service a Meshtastic radio advertises, and the three
@@ -247,7 +248,8 @@ export interface Message extends Sender {
 }
 
 export interface ClientOptions {
-  log?: (...args: any[]) => void
+  /** A logger for frame tracing. Defaults to no logging. */
+  log?: Log
   /** How long {@link Client.sync} waits for the node database. Defaults to 15s. */
   syncTimeout?: number
 }
@@ -262,7 +264,13 @@ export interface Characteristics {
   fromNum: Characteristic
 }
 
-export interface Peripheral extends EventEmitter {
+export interface PeripheralEventMap extends EventMap {
+  read: [characteristic: Characteristic, data: Uint8Array]
+  write: [characteristic: Characteristic]
+  notify: [characteristic: Characteristic, data: Uint8Array]
+}
+
+export interface Peripheral extends EventEmitter<PeripheralEventMap> {
   read(characteristic: Characteristic): void
   write(characteristic: Characteristic, data: Uint8Array, withResponse: boolean): void
 }
